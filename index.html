@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultra-Modern Drawing Canvas</title>
+    <style>
+        /* Reset and base styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            height: 100%;
+            font-family: 'Roboto', sans-serif;
+            overflow: hidden;
+        }
+
+        .gradient {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, hsla(0, 100%, 50%, 1) 0%, hsla(0, 100%, 50%, 0.5) 70%);
+            transition: background 0.1s ease-out;
+        }
+
+        /* Canvas element for drawing */
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: all;
+            cursor: url('https://img.icons8.com/ios/452/pencil.png') 32 32, crosshair;
+        }
+
+        /* Control Panel */
+        .controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 20px;
+            color: white;
+            width: 320px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            transition: transform 0.3s ease-out;
+        }
+
+        .controls:hover {
+            transform: translateX(10px);
+        }
+
+        .controls h2 {
+            font-size: 22px;
+            font-weight: 500;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .controls label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #ccc;
+            margin-bottom: 5px;
+        }
+
+        .controls input[type="range"],
+        .controls input[type="color"],
+        .controls button {
+            width: 100%;
+            height: 40px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border: none;
+            padding: 5px;
+            background: #333;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .controls input[type="range"]:hover,
+        .controls input[type="color"]:hover,
+        .controls button:hover {
+            background: #555;
+        }
+
+        .controls input[type="color"] {
+            padding: 0;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            cursor: pointer;
+            transition: transform 0.2s ease-in-out;
+        }
+
+        .controls input[type="color"]:hover {
+            transform: scale(1.2);
+        }
+
+        .controls button {
+            background: #007bff;
+            font-weight: 600;
+            transition: background 0.3s ease;
+        }
+
+        .controls button:active {
+            background: #0056b3;
+        }
+
+        .controls .color-picker {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+        }
+
+        .controls .color-picker input {
+            width: 50px;
+        }
+
+        /* Eraser & Toggle Button with Animation */
+        .toggle-button {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toggle-button span {
+            font-size: 14px;
+            font-weight: 600;
+            color: #ccc;
+        }
+
+        .toggle-button button {
+            background-color: #d9534f;
+            color: white;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            border: none;
+            font-size: 16px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .toggle-button button:hover {
+            background-color: #c9302c;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 600px) {
+            .controls {
+                width: 100%;
+                right: 0;
+                bottom: 0;
+                border-radius: 0;
+                padding: 10px;
+            }
+
+            .controls h2 {
+                font-size: 18px;
+            }
+
+            .toggle-button {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="gradient"></div>
+    <canvas id="drawingCanvas"></canvas>
+
+    <div class="controls">
+        <h2>Drawing Tools</h2>
+
+        <!-- Line Width -->
+        <label for="lineWidthSlider">Line Width</label>
+        <input type="range" id="lineWidthSlider" min="1" max="100" value="5">
+        <span id="lineWidthValue">5</span>
+
+        <!-- Line Color Picker -->
+        <div class="color-picker">
+            <label for="colorPicker">Line Color</label>
+            <input type="color" id="colorPicker" value="#000000">
+        </div>
+
+        <!-- Background Color Picker -->
+        <div class="color-picker">
+            <label for="bgColorPicker">Background Color</label>
+            <input type="color" id="bgColorPicker" value="#ff0000">
+        </div>
+
+        <!-- Opacity Control -->
+        <label for="opacitySlider">Line Opacity</label>
+        <input type="range" id="opacitySlider" min="0" max="1" step="0.05" value="1">
+        <span id="opacityValue">1</span>
+
+        <!-- Shape Selector -->
+        <label for="shapeSelector">Line Shape</label>
+        <select id="shapeSelector">
+            <option value="line">Straight Line</option>
+            <option value="circle">Circle</option>
+            <option value="freeform">Pencil (Freeform)</option>
+        </select>
+
+        <!-- Undo and Redo -->
+        <div class="toggle-button">
+            <button id="undoBtn">↩️</button>
+            <button id="redoBtn">↪️</button>
+        </div>
+
+        <!-- Eraser Toggle -->
+        <div class="toggle-button">
+            <span>Eraser</span>
+            <button id="eraserToggle">🧹</button>
+        </div>
+
+        <!-- Zoom -->
+        <label for="zoomSlider">Zoom</label>
+        <input type="range" id="zoomSlider" min="0.5" max="2" step="0.05" value="1">
+
+        <!-- Dash Pattern Toggle -->
+        <label for="dashedLineToggle">Dashed Lines</label>
+        <input type="checkbox" id="dashedLineToggle">
+
+        <!-- Save and Clear -->
+        <div class="toggle-button">
+            <button id="clearBtn">Clear</button>
+            <button id="saveBtn">Save</button>
+        </div>
+
+        <!-- Toggle Gradient/Solid -->
+        <div class="toggle-button">
+            <span>Background</span>
+            <button id="bgToggle">🌈</button>
+        </div>
+    </div>
+
+    <script>
+        const gradientElement = document.querySelector('.gradient');
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+        const lineWidthSlider = document.getElementById('lineWidthSlider');
+        const lineWidthValue = document.getElementById('lineWidthValue');
+        const opacitySlider = document.getElementById('opacitySlider');
+        const opacityValue = document.getElementById('opacityValue');
+        const eraserToggle = document.getElementById('eraserToggle');
+        const colorPicker = document.getElementById('colorPicker');
+        const bgColorPicker = document.getElementById('bgColorPicker');
+        const zoomSlider = document.getElementById('zoomSlider');
+        const shapeSelector = document.getElementById('shapeSelector');
+        const dashedLineToggle = document.getElementById('dashedLineToggle');
+        const undoBtn = document.getElementById('undoBtn');
+        const redoBtn = document.getElementById('redoBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const saveBtn = document.getElementById('saveBtn');
+        const bgToggle = document.getElementById('bgToggle');
+
+        // Variables for drawing state
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let isEraserActive = false;
+        let currentColor = colorPicker.value;
+        let currentBgColor = bgColorPicker.value;
+        let isGradientBackground = true;
+        let drawingHistory = [];
+        let historyIndex = -1;
+        let zoomLevel = 1;
+        let selectedShape = shapeSelector.value;
+
+        // Setup initial canvas size
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Update controls
+        lineWidthSlider.addEventListener('input', () => {
+            lineWidthValue.textContent = lineWidthSlider.value;
+        });
+        opacitySlider.addEventListener('input', () => {
+            opacityValue.textContent = opacitySlider.value;
+        });
+        colorPicker.addEventListener('input', (e) => {
+            currentColor = e.target.value;
+        });
+        bgColorPicker.addEventListener('input', (e) => {
+            currentBgColor = e.target.value;
+            if (!isGradientBackground) {
+                document.body.style.backgroundColor = currentBgColor;
+            }
+        });
+        shapeSelector.addEventListener('change', (e) => {
+            selectedShape = e.target.value;
+        });
+
+        // Toggle gradient/solid background
+        bgToggle.addEventListener('click', () => {
+            isGradientBackground = !isGradientBackground;
+            if (isGradientBackground) {
+                gradientElement.style.display = 'block';
+                document.body.style.backgroundColor = '';
+                bgToggle.textContent = '🌈';
+            } else {
+                gradientElement.style.display = 'none';
+                document.body.style.backgroundColor = currentBgColor;
+                bgToggle.textContent = '🎨';
+            }
+        });
+
+        // Eraser toggle
+        eraserToggle.addEventListener('click', () => {
+            isEraserActive = !isEraserActive;
+            if (isEraserActive) {
+                eraserToggle.textContent = '✏️';
+            } else {
+                eraserToggle.textContent = '🧹';
+            }
+        });
+
+        // Drawing event listeners
+        canvas.addEventListener('mousedown', (event) => {
+            isDrawing = true;
+            lastX = event.clientX;
+            lastY = event.clientY;
+            saveState();
+        });
+
+        canvas.addEventListener('mousemove', (event) => {
+            if (!isDrawing) return;
+
+            const currentX = event.clientX;
+            const currentY = event.clientY;
+
+            ctx.globalAlpha = opacitySlider.value;
+
+            if (isEraserActive) {
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.beginPath();
+                ctx.arc(currentX, currentY, lineWidthSlider.value / 2, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.strokeStyle = currentColor;
+                ctx.lineWidth = lineWidthSlider.value;
+                ctx.lineJoin = 'round';
+                ctx.lineCap = 'round';
+
+                if (selectedShape === 'circle') {
+                    ctx.beginPath();
+                    ctx.arc(currentX, currentY, lineWidthSlider.value / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    ctx.beginPath();
+                    ctx.moveTo(lastX, lastY);
+                    ctx.lineTo(currentX, currentY);
+                    ctx.stroke();
+                }
+            }
+
+            lastX = currentX;
+            lastY = currentY;
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+        });
+
+        canvas.addEventListener('mouseout', () => {
+            isDrawing = false;
+        });
+
+        // Zoom functionality
+        zoomSlider.addEventListener('input', () => {
+            zoomLevel = zoomSlider.value;
+            canvas.style.transform = `scale(${zoomLevel})`;
+        });
+
+        // Dashed lines toggle
+        dashedLineToggle.addEventListener('change', () => {
+            if (dashedLineToggle.checked) {
+                ctx.setLineDash([10, 5]);
+            } else {
+                ctx.setLineDash([]);
+            }
+        });
+
+        // Save the current canvas as an image
+        saveBtn.addEventListener('click', () => {
+            const dataUrl = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = 'drawing.png';
+            link.click();
+        });
+
+        // Clear canvas
+        clearBtn.addEventListener('click', () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+
+        // Undo and redo functionality
+        function saveState() {
+            if (historyIndex < drawingHistory.length - 1) {
+                drawingHistory = drawingHistory.slice(0, historyIndex + 1);
+            }
+            drawingHistory.push(canvas.toDataURL());
+            historyIndex++;
+        }
+
+        undoBtn.addEventListener('click', () => {
+            if (historyIndex > 0) {
+                historyIndex--;
+                const previousState = new Image();
+                previousState.src = drawingHistory[historyIndex];
+                previousState.onload = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(previousState, 0, 0);
+                };
+            }
+        });
+
+        redoBtn.addEventListener('click', () => {
+            if (historyIndex < drawingHistory.length - 1) {
+                historyIndex++;
+                const nextState = new Image();
+                nextState.src = drawingHistory[historyIndex];
+                nextState.onload = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(nextState, 0, 0);
+                };
+            }
+        });
+    </script>
+
+</body>
+</html>
