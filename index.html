@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Canvas Drawing with Features</title>
+    <title>Canvas Drawing</title>
     <style>
         * {
             margin: 0;
@@ -29,7 +29,7 @@
             cursor: url('https://img.icons8.com/ios/452/pencil.png') 32 32, crosshair;
         }
 
-        /* Dark theme control panel */
+        /* Control panel */
         .controls {
             position: fixed;
             top: 20px;
@@ -47,25 +47,17 @@
             gap: 15px;
         }
 
-        .controls h2 {
-            font-size: 18px;
-            font-weight: 600;
-            color: #E0E0E0;
-            text-align: center;
-            margin-bottom: 10px;
-        }
-
-        .controls label {
-            font-size: 12px;
+        .controls label,
+        .controls button {
+            font-size: 14px;
             font-weight: 500;
             color: #B0B0B0;
-            margin-bottom: 5px;
         }
 
         .controls input[type="range"],
         .controls input[type="color"],
-        .controls button,
-        .controls select {
+        .controls select,
+        .controls button {
             width: 100%;
             height: 40px;
             border-radius: 4px;
@@ -96,14 +88,8 @@
     <canvas id="drawingCanvas"></canvas>
 
     <div class="controls">
-        <h2>Drawing Tools</h2>
-
         <label for="lineWidthSlider">Line Width</label>
         <input type="range" id="lineWidthSlider" min="1" max="20" value="5">
-        <span id="lineWidthValue">5</span>
-
-        <label for="opacitySlider">Line Opacity</label>
-        <input type="range" id="opacitySlider" min="0" max="1" step="0.1" value="1">
 
         <label for="colorPicker">Line Color</label>
         <input type="color" id="colorPicker" value="#00ff00">
@@ -111,7 +97,7 @@
         <label for="eraserToggle">Eraser</label>
         <button id="eraserToggle">🧹</button>
 
-        <label for="shapeSelector">Line Shape</label>
+        <label for="shapeSelector">Shape</label>
         <select id="shapeSelector">
             <option value="line">Straight Line</option>
             <option value="circle">Circle</option>
@@ -132,9 +118,7 @@
         const canvas = document.getElementById('drawingCanvas');
         const ctx = canvas.getContext('2d');
         const lineWidthSlider = document.getElementById('lineWidthSlider');
-        const lineWidthValue = document.getElementById('lineWidthValue');
         const colorPicker = document.getElementById('colorPicker');
-        const opacitySlider = document.getElementById('opacitySlider');
         const eraserToggle = document.getElementById('eraserToggle');
         const shapeSelector = document.getElementById('shapeSelector');
         const clearBtn = document.getElementById('clearBtn');
@@ -149,15 +133,15 @@
         let isEraserActive = false;
         let currentColor = colorPicker.value;
         let lineWidth = lineWidthSlider.value;
-        let opacity = opacitySlider.value;
+        let opacity = 1;
         let selectedShape = shapeSelector.value;
-        let rotationAngle = 0;
+        let backgroundColor = bgColorPicker.value;
 
         // Setup canvas size
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
-        // Offscreen canvas to store drawing content
+        // Offscreen canvas to store drawing content (for undo/redo)
         const offscreenCanvas = document.createElement('canvas');
         const offscreenCtx = offscreenCanvas.getContext('2d');
         offscreenCanvas.width = canvas.width;
@@ -193,12 +177,30 @@
                 ctx.stroke();
             }
 
+            // Draw on offscreen canvas as well
+            offscreenCtx.lineWidth = lineWidth;
+            offscreenCtx.lineCap = 'round';
+            offscreenCtx.strokeStyle = isEraserActive ? '#121212' : currentColor;
+            offscreenCtx.globalAlpha = opacity;
+
+            if (selectedShape === 'freeform') {
+                offscreenCtx.beginPath();
+                offscreenCtx.moveTo(lastX, lastY);
+                offscreenCtx.lineTo(offsetX, offsetY);
+                offscreenCtx.stroke();
+            } else if (selectedShape === 'circle') {
+                const radius = Math.sqrt(Math.pow(offsetX - lastX, 2) + Math.pow(offsetY - lastY, 2));
+                offscreenCtx.beginPath();
+                offscreenCtx.arc(lastX, lastY, radius, 0, Math.PI * 2);
+                offscreenCtx.stroke();
+            }
+
             [lastX, lastY] = [offsetX, offsetY];
         });
 
         canvas.addEventListener('mouseup', () => {
             isDrawing = false;
-            // Store the current drawing step for undo/redo
+            // Save the current step for undo/redo
             saveState();
         });
 
@@ -208,13 +210,7 @@
 
         // Update line width
         lineWidthSlider.addEventListener('input', () => {
-            lineWidthValue.textContent = lineWidthSlider.value;
             lineWidth = lineWidthSlider.value;
-        });
-
-        // Update opacity
-        opacitySlider.addEventListener('input', () => {
-            opacity = opacitySlider.value;
         });
 
         // Update line color
@@ -238,16 +234,31 @@
 
         // Save the drawing as an image
         saveBtn.addEventListener('click', () => {
-            const imageUrl = canvas.toDataURL('image/png');
+            // Create a new image to combine background and drawing
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+
+            // Draw the background
+            tempCtx.fillStyle = backgroundColor;
+            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+            // Draw the content from the offscreen canvas
+            tempCtx.drawImage(offscreenCanvas, 0, 0);
+
+            // Save the image
+            const imageUrl = tempCanvas.toDataURL('image/png');
             const link = document.createElement('a');
             link.href = imageUrl;
-            link.download = 'drawing.png';
+            link.download = 'drawing_with_background.png';
             link.click();
         });
 
-        // Change background color
+        // Background color picker
         bgColorPicker.addEventListener('input', (e) => {
-            canvas.style.backgroundColor = e.target.value;
+            backgroundColor = e.target.value;
+            canvas.style.backgroundColor = backgroundColor;
         });
 
         // Undo functionality
@@ -284,6 +295,7 @@
                 ctx.drawImage(background, 0, 0);
             };
         }
+
     </script>
 
 </body>
