@@ -29,7 +29,6 @@
             cursor: url('https://img.icons8.com/ios/452/pencil.png') 32 32, crosshair;
         }
 
-        /* Control panel */
         .controls {
             position: fixed;
             top: 20px;
@@ -47,11 +46,32 @@
             gap: 15px;
         }
 
-        .controls label,
-        .controls button {
-            font-size: 14px;
-            font-weight: 500;
-            color: #B0B0B0;
+        .section {
+            margin-bottom: 10px;
+        }
+
+        .section-header {
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 10px;
+            background: #333;
+            border-radius: 4px;
+            color: #fff;
+            transition: background-color 0.3s ease;
+        }
+
+        .section-header:hover {
+            background: #555;
+        }
+
+        .section-content {
+            padding: 10px;
+            background: #222;
+            border-radius: 4px;
+            display: none;
+            flex-direction: column;
+            gap: 10px;
         }
 
         .controls input[type="range"],
@@ -88,30 +108,58 @@
     <canvas id="drawingCanvas"></canvas>
 
     <div class="controls">
-        <label for="lineWidthSlider">Line Width</label>
-        <input type="range" id="lineWidthSlider" min="1" max="20" value="5">
+        <!-- Line Settings Section -->
+        <div class="section">
+            <div class="section-header" onclick="toggleSection('lineSettings')">Line Settings</div>
+            <div class="section-content" id="lineSettings">
+                <label for="lineWidthSlider">Line Width</label>
+                <input type="range" id="lineWidthSlider" min="1" max="20" value="5">
+                <label for="colorPicker">Line Color</label>
+                <input type="color" id="colorPicker" value="#00ff00">
+            </div>
+        </div>
 
-        <label for="colorPicker">Line Color</label>
-        <input type="color" id="colorPicker" value="#00ff00">
+        <!-- Shape Settings Section -->
+        <div class="section">
+            <div class="section-header" onclick="toggleSection('shapeSettings')">Shape Settings</div>
+            <div class="section-content" id="shapeSettings">
+                <label for="shapeSelector">Shape</label>
+                <select id="shapeSelector">
+                    <option value="line">Straight Line</option>
+                    <option value="circle">Circle</option>
+                    <option value="freeform">Freeform</option>
+                </select>
+                <label for="eraserToggle">Eraser</label>
+                <button id="eraserToggle">🧹</button>
+            </div>
+        </div>
 
-        <label for="eraserToggle">Eraser</label>
-        <button id="eraserToggle">🧹</button>
+        <!-- Canvas Actions Section -->
+        <div class="section">
+            <div class="section-header" onclick="toggleSection('canvasActions')">Canvas Actions</div>
+            <div class="section-content" id="canvasActions">
+                <button id="clearBtn">Clear Canvas</button>
+                <button id="saveBtn">Save Drawing</button>
+            </div>
+        </div>
 
-        <label for="shapeSelector">Shape</label>
-        <select id="shapeSelector">
-            <option value="line">Straight Line</option>
-            <option value="circle">Circle</option>
-            <option value="freeform">Freeform</option>
-        </select>
+        <!-- Background Settings Section -->
+        <div class="section">
+            <div class="section-header" onclick="toggleSection('backgroundSettings')">Background Settings</div>
+            <div class="section-content" id="backgroundSettings">
+                <label for="bgColorPicker">Background Color</label>
+                <input type="color" id="bgColorPicker" value="#121212">
+            </div>
+        </div>
 
-        <button id="clearBtn">Clear Canvas</button>
-        <button id="saveBtn">Save Drawing</button>
-
-        <label for="bgColorPicker">Background Color</label>
-        <input type="color" id="bgColorPicker" value="#121212">
-
-        <button id="undoBtn">Undo</button>
-        <button id="redoBtn">Redo</button>
+        <!-- Undo/Redo Section -->
+        <div class="section">
+            <div class="section-header" onclick="toggleSection('undoRedo')">Undo/Redo</div>
+            <div class="section-content" id="undoRedo">
+                <button id="undoBtn">Undo</button>
+                <button id="redoBtn">Redo</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -133,7 +181,6 @@
         let isEraserActive = false;
         let currentColor = colorPicker.value;
         let lineWidth = lineWidthSlider.value;
-        let opacity = 1;
         let selectedShape = shapeSelector.value;
         let backgroundColor = bgColorPicker.value;
 
@@ -141,12 +188,10 @@
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
-        // Offscreen canvas to store drawing content (for undo/redo)
-        const offscreenCanvas = document.createElement('canvas');
-        const offscreenCtx = offscreenCanvas.getContext('2d');
-        offscreenCanvas.width = canvas.width;
-        offscreenCanvas.height = canvas.height;
+        // Set initial background color
+        canvas.style.backgroundColor = backgroundColor;
 
+        // Drawing history (for undo/redo)
         let drawingHistory = [];
         let currentStep = -1;
 
@@ -162,46 +207,38 @@
             const { offsetX, offsetY } = e;
             ctx.lineWidth = lineWidth;
             ctx.lineCap = 'round';
-            ctx.strokeStyle = isEraserActive ? '#121212' : currentColor;
-            ctx.globalAlpha = opacity;
+            ctx.strokeStyle = isEraserActive ? backgroundColor : currentColor;
 
-            if (selectedShape === 'freeform') {
-                ctx.beginPath();
-                ctx.moveTo(lastX, lastY);
-                ctx.lineTo(offsetX, offsetY);
-                ctx.stroke();
-            } else if (selectedShape === 'circle') {
-                const radius = Math.sqrt(Math.pow(offsetX - lastX, 2) + Math.pow(offsetY - lastY, 2));
-                ctx.beginPath();
-                ctx.arc(lastX, lastY, radius, 0, Math.PI * 2);
-                ctx.stroke();
+            if (isEraserActive) {
+                // Clear the part of the canvas where the mouse moves
+                ctx.clearRect(offsetX - lineWidth / 2, offsetY - lineWidth / 2, lineWidth, lineWidth);
+            } else {
+                if (selectedShape === 'freeform') {
+                    ctx.beginPath();
+                    ctx.moveTo(lastX, lastY);
+                    ctx.lineTo(offsetX, offsetY);
+                    ctx.stroke();
+                } else if (selectedShape === 'circle') {
+                    const radius = Math.sqrt(Math.pow(offsetX - lastX, 2) + Math.pow(offsetY - lastY, 2));
+                    ctx.beginPath();
+                    ctx.arc(lastX, lastY, radius, 0, Math.PI * 2);
+                    ctx.stroke();
+                } else if (selectedShape === 'line') {
+                    ctx.beginPath();
+                    ctx.moveTo(lastX, lastY);
+                    ctx.lineTo(offsetX, offsetY);
+                    ctx.stroke();
+                }
             }
 
-            // Draw on offscreen canvas as well
-            offscreenCtx.lineWidth = lineWidth;
-            offscreenCtx.lineCap = 'round';
-            offscreenCtx.strokeStyle = isEraserActive ? '#121212' : currentColor;
-            offscreenCtx.globalAlpha = opacity;
-
-            if (selectedShape === 'freeform') {
-                offscreenCtx.beginPath();
-                offscreenCtx.moveTo(lastX, lastY);
-                offscreenCtx.lineTo(offsetX, offsetY);
-                offscreenCtx.stroke();
-            } else if (selectedShape === 'circle') {
-                const radius = Math.sqrt(Math.pow(offsetX - lastX, 2) + Math.pow(offsetY - lastY, 2));
-                offscreenCtx.beginPath();
-                offscreenCtx.arc(lastX, lastY, radius, 0, Math.PI * 2);
-                offscreenCtx.stroke();
-            }
+            // Update drawing history on the offscreen canvas
+            saveState();
 
             [lastX, lastY] = [offsetX, offsetY];
         });
 
         canvas.addEventListener('mouseup', () => {
             isDrawing = false;
-            // Save the current step for undo/redo
-            saveState();
         });
 
         canvas.addEventListener('mouseout', () => {
@@ -218,47 +255,33 @@
             currentColor = e.target.value;
         });
 
+        // Update background color
+        bgColorPicker.addEventListener('input', (e) => {
+            backgroundColor = e.target.value;
+            canvas.style.backgroundColor = backgroundColor;
+        });
+
         // Eraser toggle
         eraserToggle.addEventListener('click', () => {
             isEraserActive = !isEraserActive;
             eraserToggle.textContent = isEraserActive ? 'Pencil' : '🧹';
-            currentColor = isEraserActive ? '#121212' : colorPicker.value;
+            currentColor = isEraserActive ? backgroundColor : colorPicker.value;
         });
 
         // Clear canvas
         clearBtn.addEventListener('click', () => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height); // Clear offscreen canvas as well
+            canvas.style.backgroundColor = backgroundColor; // Restore background color
             saveState();
         });
 
         // Save the drawing as an image
         saveBtn.addEventListener('click', () => {
-            // Create a new image to combine background and drawing
-            const tempCanvas = document.createElement('canvas');
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCanvas.width = canvas.width;
-            tempCanvas.height = canvas.height;
-
-            // Draw the background
-            tempCtx.fillStyle = backgroundColor;
-            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-
-            // Draw the content from the offscreen canvas
-            tempCtx.drawImage(offscreenCanvas, 0, 0);
-
-            // Save the image
-            const imageUrl = tempCanvas.toDataURL('image/png');
+            const imageUrl = canvas.toDataURL('image/png');
             const link = document.createElement('a');
             link.href = imageUrl;
             link.download = 'drawing_with_background.png';
             link.click();
-        });
-
-        // Background color picker
-        bgColorPicker.addEventListener('input', (e) => {
-            backgroundColor = e.target.value;
-            canvas.style.backgroundColor = backgroundColor;
         });
 
         // Undo functionality
@@ -294,6 +317,12 @@
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.drawImage(background, 0, 0);
             };
+        }
+
+        // Toggle collapsible sections
+        function toggleSection(id) {
+            const sectionContent = document.getElementById(id);
+            sectionContent.style.display = sectionContent.style.display === 'block' ? 'none' : 'block';
         }
 
     </script>
