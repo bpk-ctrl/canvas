@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Canvas with Rotation and Drawing</title>
+    <title>Canvas with Rotation, Drawing, and Extra Features</title>
     <style>
         * {
             margin: 0;
@@ -102,6 +102,9 @@
         <input type="range" id="lineWidthSlider" min="1" max="20" value="5">
         <span id="lineWidthValue">5</span>
 
+        <label for="opacitySlider">Line Opacity</label>
+        <input type="range" id="opacitySlider" min="0" max="1" step="0.1" value="1">
+
         <label for="colorPicker">Line Color</label>
         <input type="color" id="colorPicker" value="#00ff00">
 
@@ -116,6 +119,13 @@
         </select>
 
         <button id="clearBtn">Clear Canvas</button>
+        <button id="saveBtn">Save Drawing</button>
+
+        <label for="bgColorPicker">Background Color</label>
+        <input type="color" id="bgColorPicker" value="#121212">
+
+        <button id="undoBtn">Undo</button>
+        <button id="redoBtn">Redo</button>
     </div>
 
     <script>
@@ -124,9 +134,14 @@
         const lineWidthSlider = document.getElementById('lineWidthSlider');
         const lineWidthValue = document.getElementById('lineWidthValue');
         const colorPicker = document.getElementById('colorPicker');
+        const opacitySlider = document.getElementById('opacitySlider');
         const eraserToggle = document.getElementById('eraserToggle');
         const shapeSelector = document.getElementById('shapeSelector');
         const clearBtn = document.getElementById('clearBtn');
+        const saveBtn = document.getElementById('saveBtn');
+        const bgColorPicker = document.getElementById('bgColorPicker');
+        const undoBtn = document.getElementById('undoBtn');
+        const redoBtn = document.getElementById('redoBtn');
 
         let isDrawing = false;
         let lastX = 0;
@@ -134,6 +149,7 @@
         let isEraserActive = false;
         let currentColor = colorPicker.value;
         let lineWidth = lineWidthSlider.value;
+        let opacity = opacitySlider.value;
         let selectedShape = shapeSelector.value;
         let rotationAngle = 0;
 
@@ -146,6 +162,9 @@
         const offscreenCtx = offscreenCanvas.getContext('2d');
         offscreenCanvas.width = canvas.width;
         offscreenCanvas.height = canvas.height;
+
+        let drawingHistory = [];
+        let currentStep = -1;
 
         // Drawing logic
         canvas.addEventListener('mousedown', (e) => {
@@ -160,6 +179,7 @@
             ctx.lineWidth = lineWidth;
             ctx.lineCap = 'round';
             ctx.strokeStyle = isEraserActive ? '#121212' : currentColor;
+            ctx.globalAlpha = opacity;
 
             if (selectedShape === 'freeform') {
                 ctx.beginPath();
@@ -178,8 +198,8 @@
 
         canvas.addEventListener('mouseup', () => {
             isDrawing = false;
-            // After drawing, store content in offscreen canvas
-            offscreenCtx.drawImage(canvas, 0, 0);
+            // Store the current drawing step for undo/redo
+            saveState();
         });
 
         canvas.addEventListener('mouseout', () => {
@@ -190,6 +210,11 @@
         lineWidthSlider.addEventListener('input', () => {
             lineWidthValue.textContent = lineWidthSlider.value;
             lineWidth = lineWidthSlider.value;
+        });
+
+        // Update opacity
+        opacitySlider.addEventListener('input', () => {
+            opacity = opacitySlider.value;
         });
 
         // Update line color
@@ -208,65 +233,57 @@
         clearBtn.addEventListener('click', () => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height); // Clear offscreen canvas as well
+            saveState();
         });
 
-        // Rotation logic: right-click and drag to rotate canvas
-        let isRightClick = false;
-        let startX = 0;
-        let startY = 0;
+        // Save the drawing as an image
+        saveBtn.addEventListener('click', () => {
+            const imageUrl = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = imageUrl;
+            link.download = 'drawing.png';
+            link.click();
+        });
 
-        canvas.addEventListener('mousedown', (e) => {
-            if (e.button === 2) { // Right mouse button
-                isRightClick = true;
-                startX = e.clientX;
-                startY = e.clientY;
-                e.preventDefault(); // Prevent the context menu from showing
+        // Change background color
+        bgColorPicker.addEventListener('input', (e) => {
+            canvas.style.backgroundColor = e.target.value;
+        });
+
+        // Undo functionality
+        undoBtn.addEventListener('click', () => {
+            if (currentStep > 0) {
+                currentStep--;
+                redrawCanvas();
             }
         });
 
-        canvas.addEventListener('mousemove', (e) => {
-            if (!isRightClick) return;
-
-            const deltaX = e.clientX - startX;
-            const deltaY = e.clientY - startY;
-
-            rotationAngle += Math.sqrt(deltaX * deltaX + deltaY * deltaY) * 0.1; // Control the speed of rotation
-            startX = e.clientX;
-            startY = e.clientY;
-
-            redrawCanvas();
+        // Redo functionality
+        redoBtn.addEventListener('click', () => {
+            if (currentStep < drawingHistory.length - 1) {
+                currentStep++;
+                redrawCanvas();
+            }
         });
 
-        canvas.addEventListener('mouseup', () => {
-            isRightClick = false;
-            // After rotation, update the offscreen canvas with the rotated content
-            offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
-            offscreenCtx.drawImage(canvas, 0, 0); // Store rotated content to offscreen canvas
-        });
-
-        canvas.addEventListener('contextmenu', (e) => {
-            e.preventDefault(); // Prevent the default right-click context menu
-        });
-
-        // Redraw the canvas with rotation applied
-        function redrawCanvas() {
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
-
-            // Clear the main canvas before redrawing
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            ctx.save();
-            ctx.translate(centerX, centerY);
-            ctx.rotate(rotationAngle);
-            ctx.translate(-centerX, -centerY);
-
-            // Redraw content from the offscreen canvas
-            ctx.drawImage(offscreenCanvas, 0, 0);
-
-            ctx.restore();
+        // Save the current state for undo/redo
+        function saveState() {
+            if (currentStep < drawingHistory.length - 1) {
+                drawingHistory = drawingHistory.slice(0, currentStep + 1);
+            }
+            drawingHistory.push(canvas.toDataURL());
+            currentStep++;
         }
 
+        // Redraw the canvas
+        function redrawCanvas() {
+            const background = new Image();
+            background.src = drawingHistory[currentStep];
+            background.onload = () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(background, 0, 0);
+            };
+        }
     </script>
 
 </body>
